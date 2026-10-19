@@ -117,3 +117,7 @@ claude plugin validate .
 ```
 
 After changing the scripts, run `/progress-status:setup` again to copy the new version into `~/.claude/progress-status/`.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

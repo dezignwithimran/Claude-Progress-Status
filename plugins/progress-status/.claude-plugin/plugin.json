@@ -5,6 +5,7 @@
   "author": {
     "name": "Imran Haider"
   },
+  "license": "MIT",
   "keywords": ["statusline", "progress", "tokens", "context"],
   "types": "./types/index.d.ts"
 }
