@@ -13,20 +13,24 @@ No dependencies, just Node.js (which Claude Code already uses).
 
 ## Install
 
-From GitHub (after you push this repo):
+From GitHub:
 
 ```bash
-claude plugin marketplace add <your-github-user>/<repo-name>
+claude plugin marketplace add dezignwithimran/claude-progress-status
 ```
 
 ```bash
 claude plugin install progress-status@progress-status-marketplace
 ```
 
-Or from a local folder while developing:
+Or from a local clone while developing:
 
 ```bash
-claude plugin marketplace add "D:/Imran Haider/Claude Code Plugins/Project Progress & Token Status"
+git clone https://github.com/dezignwithimran/claude-progress-status.git
+```
+
+```bash
+claude plugin marketplace add ./claude-progress-status
 ```
 
 Then, inside Claude Code, turn it on:
