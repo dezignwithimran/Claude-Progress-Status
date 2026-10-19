@@ -1,4 +1,4 @@
-# progress-status
+# Progress-Status
 
 A Claude Code plugin that shows how far the current task list has got and how full the context window is, each as a progress bar:
 
