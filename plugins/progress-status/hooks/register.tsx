@@ -9,7 +9,6 @@ import type { Task, TaskStatus, Usage } from '../types'
 const tasksAtom = atom({ plugin: 'progress-status', key: 'tasks' } as const, [] as Task[])
 const usageAtom = atom({ plugin: 'progress-status', key: 'usage' } as const, null as Usage | null)
 
-const BAR_WIDTH = 10
 const PLAN_TOOL = 'mcp__ccd_turn__update_plan'
 
 function normStatus(s: unknown): TaskStatus | 'deleted' {
@@ -66,6 +65,64 @@ function usageColor(ratio: number) {
   if (ratio > 0.8) return 'error' as const
   if (ratio >= 0.5) return 'warning' as const
   return 'success' as const
+}
+
+// Desktop drawings. The SVG is an image, so its colors are fixed values that read
+// on both light and dark backgrounds; the track is a translucent grey.
+const TASK_BAR_WIDTH = 132
+const BAR_HEIGHT = 8
+const RING_SIZE = 16
+const FILL = { success: '#22c55e', warning: '#f59e0b', error: '#ef4444', progress: '#3b82f6' }
+const TRACK = 'rgba(128,128,128,0.28)'
+
+// One rounded pill per task (a single bar past 16 tasks): done filled,
+// in progress half-filled, pending as track.
+function taskBarSvg(tasks: Task[]): string {
+  const allDone = tasks.every(t => t.status === 'completed')
+  const color = allDone ? FILL.success : FILL.progress
+  const w = TASK_BAR_WIDTH
+  const h = BAR_HEIGHT
+  const r = h / 2
+  const rect = (x: number, width: number, rx: number, fill: string, opacity = 1) =>
+    `<rect x="${x.toFixed(1)}" width="${width.toFixed(1)}" height="${h}" rx="${rx}" fill="${fill}"` +
+    (opacity < 1 ? ` opacity="${opacity}"` : '') + '/>'
+
+  let shapes = ''
+  if (tasks.length > 16) {
+    const done = tasks.filter(t => t.status === 'completed').length
+    const fillW = done ? Math.max(h, (done / tasks.length) * w) : 0
+    shapes = rect(0, w, r, TRACK) + (fillW ? rect(0, fillW, r, color) : '')
+  } else {
+    const gap = 3
+    const segW = (w - gap * (tasks.length - 1)) / tasks.length
+    const rx = Math.min(r, segW / 2)
+    tasks.forEach((t, i) => {
+      const x = i * (segW + gap)
+      shapes += rect(x, segW, rx, t.status === 'completed' ? color : TRACK)
+      if (t.status === 'in_progress') shapes += rect(x, segW / 2, rx, color, 0.6)
+    })
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${shapes}</svg>`
+}
+
+// A ring gauge that fills clockwise from the top.
+function ringSvg(ratio: number): string {
+  const s = RING_SIZE
+  const stroke = 3
+  const rad = (s - stroke) / 2
+  const c = 2 * Math.PI * rad
+  const color = FILL[usageColor(ratio)]
+  const arc = (clamp01(ratio) * c).toFixed(2)
+  const mid = s / 2
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}" viewBox="0 0 ${s} ${s}">` +
+    `<circle cx="${mid}" cy="${mid}" r="${rad}" fill="none" stroke="${TRACK}" stroke-width="${stroke}"/>` +
+    (ratio > 0
+      ? `<circle cx="${mid}" cy="${mid}" r="${rad}" fill="none" stroke="${color}" stroke-width="${stroke}" ` +
+        `stroke-linecap="round" stroke-dasharray="${arc} ${c.toFixed(2)}" transform="rotate(-90 ${mid} ${mid})"/>`
+      : '') +
+    '</svg>'
+  )
 }
 
 // Best-effort: a usage reading that fails must not lose a task update.
@@ -131,46 +188,49 @@ export const register: Register = on => {
   }).catch(($, e, next) => next(e))
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (e.props.hasSurvey) return next(e)
+    // The terminal already has the status line; the band is for surfaces without one.
+    if (e.surface === 'terminal' || e.props.hasSurvey) return next(e)
     const tasks = await read($, tasksAtom)
     const usage = await read($, usageAtom)
     if (tasks.length === 0 && (!usage || usage.tokens == null)) return next(e)
 
-    const { Box, Text } = $.ui.resolve(e)
-
-    const bar = (key: string, ratio: number, color: 'success' | 'warning' | 'error' | 'suggestion') => {
-      const filled = Math.round(clamp01(ratio) * BAR_WIDTH)
-      return [
-        <Text key={`${key}-on`} mono color={color}>{'█'.repeat(filled)}</Text>,
-        <Text key={`${key}-off`} mono dimColor>{'░'.repeat(BAR_WIDTH - filled)}</Text>,
-      ]
-    }
+    const { Box, Text, Svg } = $.ui.resolve(e)
 
     const done = tasks.filter(t => t.status === 'completed').length
-    const taskRatio = tasks.length ? done / tasks.length : 0
     const current = tasks.find(t => t.status === 'in_progress')
-
     const tokens = usage?.tokens ?? 0
     const window = usage?.window ?? 200_000
-    const ctxRatio = tokens / window
+    const ratio = clamp01(tokens / window)
+    const pct = Math.round(ratio * 100)
 
     return (
-      <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
-        <Text key="tasks-label" dimColor>Tasks</Text>
-        {tasks.length === 0 ? (
-          <Text key="tasks-none" dimColor>—</Text>
-        ) : (
-          [
-            ...bar('tasks', taskRatio, taskRatio >= 1 ? 'success' : 'suggestion'),
-            <Text key="tasks-count" tabular>{`${done}/${tasks.length} ${Math.round(taskRatio * 100)}%`}</Text>,
-          ]
-        )}
-        <Text key="sep" dimColor>│</Text>
-        <Text key="ctx-label" dimColor>Context</Text>
-        {bar('ctx', ctxRatio, usageColor(ctxRatio))}
-        <Text key="ctx-count" tabular>{`${formatTokens(tokens)}/${formatTokens(window)}`}</Text>
-        <Text key="ctx-pct" tabular color={usageColor(ctxRatio)}>{`${Math.round(clamp01(ctxRatio) * 100)}%`}</Text>
-        {current ? <Text key="current" dimColor wrap="truncate">{`· ${current.label}`}</Text> : null}
+      <Box flexDirection="row" alignItems="center" columnGap={3} flexWrap="wrap">
+        <Box flexDirection="row" alignItems="center" columnGap={1}>
+          <Text dimColor size="footnote">Tasks</Text>
+          {tasks.length === 0 ? (
+            <Text dimColor size="footnote">none yet</Text>
+          ) : (
+            [
+              <Svg
+                key="tasks-bar"
+                source={taskBarSvg(tasks)}
+                alt={`${done} of ${tasks.length} tasks done`}
+                width={TASK_BAR_WIDTH}
+                height={BAR_HEIGHT}
+              />,
+              <Text key="tasks-count" size="footnote" weight="medium" tabular>{`${done}/${tasks.length}`}</Text>,
+            ]
+          )}
+          {current ? (
+            <Text dimColor size="footnote" wrap="truncate">{current.label}</Text>
+          ) : null}
+        </Box>
+        <Box flexDirection="row" alignItems="center" columnGap={1}>
+          <Svg source={ringSvg(ratio)} alt={`Context ${pct}% full`} width={RING_SIZE} height={RING_SIZE} />
+          <Text dimColor size="footnote">Context</Text>
+          <Text size="footnote" weight="medium" tabular>{`${formatTokens(tokens)} / ${formatTokens(window)}`}</Text>
+          <Text size="footnote" weight="semibold" tabular color={usageColor(ratio)}>{`${pct}%`}</Text>
+        </Box>
       </Box>
     )
   })

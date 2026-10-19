@@ -43,11 +43,12 @@ This copies the script to `~/.claude/progress-status/` and sets `statusLine` in 
 
 ## In the Claude desktop app
 
-The desktop app's Code tab doesn't run terminal status lines, so the plugin also adds a **band above the prompt** there. It has the same two bars and needs no setup step: install the plugin and start a new session.
+The desktop app's Code tab doesn't run terminal status lines, so the plugin also adds a **band above the prompt** there. It needs no setup step: install the plugin and start a new session.
 
-```
-Tasks █████░░░░░ 2/4 50% │ Context █████████░ 170k/200k 85% · Build the footer
-```
+- **Tasks**: a segmented bar with one rounded pill per task. Done tasks are filled, the current one is half-filled, and the rest are grey. All pills turn green once everything is done. Next to it are the count (`2/4`) and the current task's name.
+- **Context**: a small ring gauge that fills clockwise, green, then amber from 50%, then red above 80%, with `170k / 200k · 85%` beside it.
+
+In the terminal the band stays out of the way, since the status line already shows the same thing there.
 
 - Tasks come from whichever task list the session uses (the desktop task list, `TodoWrite`, or `TaskCreate`/`TaskUpdate`), as Claude updates it.
 - Context comes from the live context window and refreshes after every tool call and reply.

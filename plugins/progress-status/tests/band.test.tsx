@@ -6,34 +6,50 @@ const BAND = {
   props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 100, scroll: { offset: 0, bodyRows: 10 }, view: {} },
 } as const
 
-const usageAt = (tokens: number) => () => ({ value: {
-  startedAt: 0,
-  context: { tokens, window: 200_000, percent: Math.round((tokens / 200_000) * 100) },
-  rateLimits: [],
-} })
+const usageAt = (tokens: number) => () => ({
+  value: {
+    startedAt: 0,
+    context: { tokens, window: 200_000, percent: Math.round((tokens / 200_000) * 100) },
+    rateLimits: [],
+  },
+})
 
-test('TodoWrite progress and context tokens show on every surface', async ($, on) => {
+// Beneath the plugin: what the engine draws when the plugin steps aside.
+const engineBand = () => ($: any, e: any) => {
+  const { Box } = $.ui.resolve(e)
+  return <Box key="engine" />
+}
+
+test('desktop: segmented task bar, ring gauge and numbers', async ($, on) => {
   on('session.usage', usageAt(170_000))
   on('tool.call', () => ({ result: {} }))
 
   await $.tool.call({
     tool: 'TodoWrite',
     todos: [
-      { content: 'a', status: 'completed', activeForm: 'a' },
-      { content: 'b', status: 'completed', activeForm: 'b' },
-      { content: 'c', status: 'in_progress', activeForm: 'c' },
-      { content: 'd', status: 'pending', activeForm: 'd' },
+      { content: 'Plan', status: 'completed', activeForm: 'Planning' },
+      { content: 'Build', status: 'completed', activeForm: 'Building' },
+      { content: 'Write tests', status: 'in_progress', activeForm: 'Writing tests' },
+      { content: 'Ship', status: 'pending', activeForm: 'Shipping' },
     ],
   })
 
-  for (const surface of ['terminal', 'desktop'] as const) {
-    const ui = await $.ui.mount({ plugin: PLUGIN, surface, ...BAND })
-    expect(await ui.find({ type: 'Text', text: '2/4 50%' })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: '170k/200k' })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: '85%' })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: '· c' })).toBeDefined()
-    await ui.unmount()
-  }
+  const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'desktop', ...BAND })
+  expect(await ui.find({ type: 'Text', text: '2/4' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'Write tests' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '170k / 200k' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '85%' })).toBeDefined()
+  expect(await ui.findAll({ type: 'Svg' })).toHaveLength(2)
+})
+
+test('terminal: the band steps aside for the status line', async ($, on) => {
+  on('session.usage', usageAt(170_000))
+  on('tool.call', () => ({ result: {} }))
+  on('ui.render', engineBand())
+  await $.tool.call({ tool: 'TodoWrite', todos: [{ content: 'Plan', status: 'pending', activeForm: 'Planning' }] })
+
+  const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'terminal', ...BAND })
+  expect(await ui.find({ type: 'Text', text: /Context/ })).toBeUndefined()
 })
 
 test('desktop update_plan: items, then advance', async ($, on) => {
@@ -43,16 +59,16 @@ test('desktop update_plan: items, then advance', async ($, on) => {
   await $.tool.call({
     tool: 'mcp__ccd_turn__update_plan',
     items: [
-      { content: 'one', status: 'in_progress' },
-      { content: 'two', status: 'pending' },
-      { content: 'three', status: 'pending' },
+      { content: 'First step', status: 'in_progress' },
+      { content: 'Second step', status: 'pending' },
+      { content: 'Third step', status: 'pending' },
     ],
   })
   await $.tool.call({ tool: 'mcp__ccd_turn__update_plan', advance: true })
 
   const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'desktop', ...BAND })
-  expect(await ui.find({ type: 'Text', text: '1/3 33%' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: '· two' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '1/3' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'Second step' })).toBeDefined()
 })
 
 test('TaskCreate takes the id from the result; TaskUpdate completes it', async ($, on) => {
@@ -65,15 +81,12 @@ test('TaskCreate takes the id from the result; TaskUpdate completes it', async (
   await $.tool.call({ tool: 'TaskUpdate', taskId: '7', status: 'completed' })
 
   const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'desktop', ...BAND })
-  expect(await ui.find({ type: 'Text', text: '1/2 50%' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '1/2' })).toBeDefined()
 })
 
 test('nothing to show before any usage or tasks', async ($, on) => {
   on('session.usage', () => ({ value: { startedAt: 0, context: { window: 200_000 }, rateLimits: [] } }))
-  on('ui.render', ($, e) => {
-    const { Box } = $.ui.resolve(e)
-    return <Box key="engine" />
-  })
+  on('ui.render', engineBand())
   const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'desktop', ...BAND })
   expect(await ui.find({ type: 'Text', text: /Context/ })).toBeUndefined()
 })
