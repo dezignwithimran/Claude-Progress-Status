@@ -1,0 +1,10 @@
+{
+  "barWidth": 10,
+  "colors": true,
+  "showModel": true,
+  "showTasks": true,
+  "showCurrentTask": false,
+  "showContext": true,
+  "separator": " │ ",
+  "demo": false
+}

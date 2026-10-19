@@ -1,0 +1,9 @@
+{
+  "name": "progress-status",
+  "version": "0.2.0",
+  "description": "Status line with a task-progress bar (done/total) and a context-window token bar (used/limit).",
+  "author": {
+    "name": "Imran Haider"
+  },
+  "keywords": ["statusline", "progress", "tokens", "context"]
+}

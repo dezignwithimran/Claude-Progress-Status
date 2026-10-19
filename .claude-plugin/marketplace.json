@@ -1,0 +1,17 @@
+{
+  "name": "progress-status-marketplace",
+  "owner": {
+    "name": "Imran Haider"
+  },
+  "metadata": {
+    "description": "Claude Code status line showing task progress and context-window token usage as progress bars."
+  },
+  "plugins": [
+    {
+      "name": "progress-status",
+      "source": "./plugins/progress-status",
+      "description": "Status line with a task-progress bar and a context-window token bar.",
+      "version": "0.2.0"
+    }
+  ]
+}
