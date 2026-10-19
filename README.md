@@ -1,6 +1,6 @@
 # progress-status
 
-A Claude Code status line that shows how far the current task list has got and how full the context window is, each as a progress bar:
+A Claude Code plugin that shows how far the current task list has got and how full the context window is, each as a progress bar:
 
 ```
 Opus 5.5 │ Tasks ██████░░░░ 3/5 60% │ Context ████░░░░░░ 84.2k/200k 42%
@@ -40,6 +40,18 @@ Then, inside Claude Code, turn it on:
 ```
 
 This copies the script to `~/.claude/progress-status/` and sets `statusLine` in `~/.claude/settings.json`. If you already had a status line, it is saved and comes back when you run `/progress-status:remove`.
+
+## In the Claude desktop app
+
+The desktop app's Code tab doesn't run terminal status lines, so the plugin also adds a **band above the prompt** there. It has the same two bars and needs no setup step: install the plugin and start a new session.
+
+```
+Tasks █████░░░░░ 2/4 50% │ Context █████████░ 170k/200k 85% · Build the footer
+```
+
+- Tasks come from whichever task list the session uses (the desktop task list, `TodoWrite`, or `TaskCreate`/`TaskUpdate`), as Claude updates it.
+- Context comes from the live context window and refreshes after every tool call and reply.
+- The band appears once there's something to show, and steps aside while a survey is open.
 
 ## Preview the colors (demo mode)
 
@@ -93,6 +105,10 @@ Edit `~/.claude/progress-status/config.json`:
 
 ```bash
 node test/run.js
+```
+
+```bash
+claude plugin test plugins/progress-status
 ```
 
 ```bash

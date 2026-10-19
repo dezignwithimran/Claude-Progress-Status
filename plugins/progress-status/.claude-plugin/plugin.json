@@ -1,9 +1,10 @@
 {
   "name": "progress-status",
-  "version": "0.2.0",
-  "description": "Status line with a task-progress bar (done/total) and a context-window token bar (used/limit).",
+  "version": "0.3.0",
+  "description": "Task-progress bar (done/total) and context-window token bar (used/limit): a status line in the terminal, a band above the prompt in the desktop app.",
   "author": {
     "name": "Imran Haider"
   },
-  "keywords": ["statusline", "progress", "tokens", "context"]
+  "keywords": ["statusline", "progress", "tokens", "context"],
+  "types": "./types/index.d.ts"
 }
