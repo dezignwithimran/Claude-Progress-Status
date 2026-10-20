@@ -50,6 +50,8 @@ The desktop app's Code tab doesn't run terminal status lines, so the plugin also
 
 In the terminal the band stays out of the way, since the status line already shows the same thing there.
 
+- When Claude works without a task list, the band counts the request's **steps** instead and names the one running now, for example `Steps 7 · Edit pricing.js`, then `done` when the request finishes.
+- Context refreshes after every model response, so it climbs step by step while Claude works.
 - Tasks come from whichever task list the session uses (the desktop task list, `TodoWrite`, or `TaskCreate`/`TaskUpdate`), as Claude updates it.
 - Context comes from the live context window and refreshes after every tool call and reply.
 - The band appears once there's something to show, and steps aside while a survey is open.

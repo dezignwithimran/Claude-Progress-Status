@@ -1,13 +1,31 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Task, TaskStatus, Usage } from '../types'
+import type { Activity, Task, TaskStatus, Usage } from '../types'
 
 // Same idea as the terminal status line (plugins/progress-status/scripts/lib):
 // tasks come from the task tools as they run, tokens from the live context window.
+// Without a task list, the band counts the request's steps (tool calls) instead.
 
 const tasksAtom = atom({ plugin: 'progress-status', key: 'tasks' } as const, [] as Task[])
 const usageAtom = atom({ plugin: 'progress-status', key: 'usage' } as const, null as Usage | null)
+const IDLE: Activity = { steps: 0, last: null, isWorking: false }
+const activityAtom = atom({ plugin: 'progress-status', key: 'activity' } as const, IDLE)
+
+// A short name for a step: "Edit pricing.js", "Bash npm", "Browser navigate".
+function stepLabel(e: Record<string, unknown>): string {
+  const tool = String(e.tool ?? '')
+  const file = typeof e.file_path === 'string' ? e.file_path : typeof e.path === 'string' ? e.path : ''
+  if (file) return `${tool} ${file.split(/[\\/]/).pop()}`
+  if (typeof e.command === 'string') return `${tool} ${e.command.trim().split(/\s+/)[0] ?? ''}`.trim()
+  if (tool.startsWith('mcp__')) {
+    const [, server = '', name = ''] = tool.split('__')
+    // Connector servers often have id-like names; the tool name alone reads better there.
+    const isId = /^[0-9a-f-]{16,}$/i.test(server)
+    return (isId ? name : `${server.replace(/^Claude_/, '')} ${name}`).replace(/_/g, ' ').trim()
+  }
+  return tool
+}
 
 const PLAN_TOOL = 'mcp__ccd_turn__update_plan'
 
@@ -168,13 +186,34 @@ export const register: Register = on => {
     return result
   })
 
+  // A new request starts its step count over.
+  on('turn.start', async ($, e, next) => {
+    await update($, activityAtom, () => ({ steps: 0, last: null, isWorking: true }))
+    // A finished list belongs to the last request; clear it so this one starts fresh.
+    await update($, tasksAtom, tasks => (tasks.length && tasks.every(t => t.status === 'completed') ? [] : tasks))
+    return next(e)
+  })
+
+  // Each model response: the context window has just grown, so read it again.
+  on('turn.step', async function* ($, e, next) {
+    const result = yield* next(e)
+    await refreshUsage($)
+    return result
+  })
+
   on('turn.complete', async ($, e, next) => {
     const result = await next(e)
+    await update($, activityAtom, a => ({ ...a, isWorking: false }))
     await refreshUsage($)
     return result
   })
 
   on('tool.call', async ($, e, next) => {
+    // Count the step as it starts, so the band names what is running now.
+    if (!e.agentId) {
+      const label = stepLabel(e as unknown as Record<string, unknown>)
+      await update($, activityAtom, a => ({ steps: a.steps + 1, last: label, isWorking: true }))
+    }
     const ran = await next(e)
     if (e.agentId || ran.deny !== undefined || ('isError' in ran && ran.isError)) return ran
 
@@ -192,7 +231,8 @@ export const register: Register = on => {
     if (e.surface === 'terminal' || e.props.hasSurvey) return next(e)
     const tasks = await read($, tasksAtom)
     const usage = await read($, usageAtom)
-    if (tasks.length === 0 && (!usage || usage.tokens == null)) return next(e)
+    const activity = await read($, activityAtom)
+    if (tasks.length === 0 && activity.steps === 0 && (!usage || usage.tokens == null)) return next(e)
 
     const { Box, Text, Svg } = $.ui.resolve(e)
 
@@ -206,9 +246,20 @@ export const register: Register = on => {
     return (
       <Box flexDirection="row" alignItems="center" columnGap={3} flexWrap="wrap">
         <Box flexDirection="row" alignItems="center" columnGap={1}>
-          <Text dimColor size="footnote">Tasks</Text>
+          <Text dimColor size="footnote">{tasks.length === 0 && activity.steps > 0 ? 'Steps' : 'Tasks'}</Text>
           {tasks.length === 0 ? (
-            <Text dimColor size="footnote">none yet</Text>
+            activity.steps > 0 ? (
+              [
+                <Text key="steps-count" size="footnote" weight="medium" tabular>{String(activity.steps)}</Text>,
+                activity.isWorking && activity.last ? (
+                  <Text key="steps-now" dimColor size="footnote" wrap="truncate">{`· ${activity.last}`}</Text>
+                ) : (
+                  <Text key="steps-done" size="footnote" color="success">done</Text>
+                ),
+              ]
+            ) : (
+              <Text dimColor size="footnote">none yet</Text>
+            )
           ) : (
             [
               <Svg

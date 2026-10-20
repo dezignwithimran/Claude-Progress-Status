@@ -90,3 +90,43 @@ test('nothing to show before any usage or tasks', async ($, on) => {
   const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'desktop', ...BAND })
   expect(await ui.find({ type: 'Text', text: /Context/ })).toBeUndefined()
 })
+
+test('no task list: counts steps live and names the running one', async ($, on) => {
+  on('session.usage', usageAt(30_000))
+  on('turn.start', ($: any, e: any) => ({ turnId: e.turnId }) as any)
+  on('tool.call', () => ({ result: {} }))
+  on('turn.complete', () => ({ text: '' }) as any)
+
+  await $.turn.start({ text: 'build it', turnId: 't1' } as any)
+  await $.tool.call({ tool: 'Read', file_path: 'D:/app/src/pricing.js' } as any)
+  await $.tool.call({ tool: 'Bash', command: 'npm test -- --watch=false', description: 'x' } as any)
+
+  const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'desktop', ...BAND })
+  expect(await ui.find({ type: 'Text', text: 'Steps' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '2' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '· Bash npm' })).toBeDefined()
+  await ui.unmount()
+
+  await $.turn.complete({ reason: 'answer', answer: 'Done.', turnId: 't1' } as any)
+  const after = await $.ui.mount({ plugin: PLUGIN, surface: 'desktop', ...BAND })
+  expect(await after.find({ type: 'Text', text: 'done' })).toBeDefined()
+})
+
+test('context refreshes after every model response', async ($, on) => {
+  let tokens = 40_000
+  on('session.usage', () => ({ value: { startedAt: 0, context: { tokens, window: 200_000 }, rateLimits: [] } }))
+  on('turn.step', async function* ($: any, e: any) {
+    return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'end_turn', usage: {} } as any
+  })
+
+  tokens = 64_000
+  for await (const _ of $.turn.step({ turnId: 't1', index: 0, model: 'm', messageCount: 1 } as any)) { /* drain */ }
+  const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'desktop', ...BAND })
+  expect(await ui.find({ type: 'Text', text: '64k / 200k' })).toBeDefined()
+  await ui.unmount()
+
+  tokens = 96_000
+  for await (const _ of $.turn.step({ turnId: 't1', index: 1, model: 'm', messageCount: 3 } as any)) { /* drain */ }
+  const again = await $.ui.mount({ plugin: PLUGIN, surface: 'desktop', ...BAND })
+  expect(await again.find({ type: 'Text', text: '96k / 200k' })).toBeDefined()
+})
