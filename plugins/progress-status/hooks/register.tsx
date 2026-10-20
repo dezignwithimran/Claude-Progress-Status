@@ -199,7 +199,22 @@ async function trackTasks($: EngineInterface, e: { tool: string }, ran: unknown)
   }
 }
 
-export const register: Register = on => {
+// Without a task list the band has no pills to fill, so by default the plugin
+// asks Claude to keep one. Turned off with the plugin's keepTaskList setting.
+const TASK_LIST_SECTION = {
+  id: 'progress-status:task-list',
+  text: 'When a request has 3 or more steps, keep a task list and update it as each step finishes.',
+  scope: 'session',
+} as const
+
+export const register: Register = (on, options) => {
+  if (options.keepTaskList !== false) {
+    on('prompt.compose', async ($, e, next) => {
+      const { sections } = await next(e)
+      return { sections: [...sections, TASK_LIST_SECTION] }
+    })
+  }
+
   on('session.start', async ($, e, next) => {
     const result = await next(e)
     await refreshUsage($)

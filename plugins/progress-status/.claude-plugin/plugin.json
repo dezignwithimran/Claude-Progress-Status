@@ -1,11 +1,24 @@
 {
   "name": "progress-status",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Task-progress bar (done/total) and context-window token bar (used/limit): a status line in the terminal, a band above the prompt in the desktop app.",
   "author": {
     "name": "Imran Haider"
   },
   "license": "MIT",
-  "keywords": ["statusline", "progress", "tokens", "context"],
-  "types": "./types/index.d.ts"
+  "keywords": [
+    "statusline",
+    "progress",
+    "tokens",
+    "context"
+  ],
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "keepTaskList": {
+      "type": "boolean",
+      "title": "Ask Claude to keep a task list",
+      "description": "Adds one line to Claude's instructions: when a request has 3 or more steps, keep a task list and update it as each step finishes, so the progress bar has something to show.",
+      "default": true
+    }
+  }
 }

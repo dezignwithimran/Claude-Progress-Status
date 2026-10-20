@@ -75,6 +75,14 @@ Turn it off with `/progress-status:demo off`.
 
 > The status line is the bar under the input box. If you ask Claude to run the script with a shell command, the output shows up in the chat without colors. That's Claude Code's tool display, not the plugin.
 
+## Keeping a task list
+
+The pills only fill when Claude keeps a task list, and Claude doesn't always make one. So by default the plugin adds one line to Claude's instructions:
+
+> When a request has 3 or more steps, keep a task list and update it as each step finishes.
+
+To turn it off, open `/plugin`, pick **progress-status**, and switch off **Ask Claude to keep a task list**. The Steps counter still shows progress without a list.
+
 ## Configure
 
 Edit `~/.claude/progress-status/config.json`:

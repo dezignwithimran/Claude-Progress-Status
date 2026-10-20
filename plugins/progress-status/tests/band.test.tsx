@@ -183,3 +183,19 @@ test('session start runs setup.js auto and says when it turned the status line o
   expect(runs[0]?.[2]).toBe('auto')
   expect(toasts).toEqual(['progress-status: terminal status line turned on'])
 })
+
+const COMPOSE = { model: 'm', promptModel: 'm', surfaces: ['desktop'], tools: [], outputStyle: null, traits: [] } as any
+const BASE = [{ id: 'intro', text: 'You are Claude.', scope: 'shared' }]
+
+test('asks Claude to keep a task list by default', async ($, on) => {
+  on('prompt.compose', () => ({ sections: BASE }) as any)
+  const { sections } = await $.prompt.compose(COMPOSE)
+  expect(sections.map((s: any) => s.id)).toEqual(['intro', 'progress-status:task-list'])
+  expect(sections[1]?.text).toMatch(/3 or more steps, keep a task list/)
+})
+
+test('keepTaskList off leaves the system prompt alone', { options: { keepTaskList: false } }, async ($, on) => {
+  on('prompt.compose', () => ({ sections: BASE }) as any)
+  const { sections } = await $.prompt.compose(COMPOSE)
+  expect(sections.map((s: any) => s.id)).toEqual(['intro'])
+})
