@@ -130,3 +130,19 @@ test('context refreshes after every model response', async ($, on) => {
   const again = await $.ui.mount({ plugin: PLUGIN, surface: 'desktop', ...BAND })
   expect(await again.find({ type: 'Text', text: '96k / 200k' })).toBeDefined()
 })
+
+test('desktop wrap-up checks off the whole list', async ($, on) => {
+  on('session.usage', usageAt(20_000))
+  on('tool.call', () => ({ result: {} }))
+  await $.tool.call({
+    tool: 'mcp__ccd_turn__update_plan',
+    items: [
+      { content: 'Find the cause', status: 'completed' },
+      { content: 'Fix it', status: 'completed' },
+      { content: 'Test and push', status: 'in_progress' },
+    ],
+  })
+  await $.tool.call({ tool: 'mcp__ccd_turn__wrap_up', recap: 'Done.' })
+  const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'desktop', ...BAND })
+  expect(await ui.find({ type: 'Text', text: '3/3' })).toBeDefined()
+})

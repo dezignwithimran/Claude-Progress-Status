@@ -28,6 +28,7 @@ function stepLabel(e: Record<string, unknown>): string {
 }
 
 const PLAN_TOOL = 'mcp__ccd_turn__update_plan'
+const WRAP_UP_TOOL = 'mcp__ccd_turn__wrap_up'
 
 function normStatus(s: unknown): TaskStatus | 'deleted' {
   const v = String(s ?? 'pending').toLowerCase()
@@ -176,6 +177,9 @@ async function trackTasks($: EngineInterface, e: { tool: string }, ran: unknown)
     )
   } else if (e.tool === PLAN_TOOL) {
     await update($, tasksAtom, tasks => applyPlan(tasks, args))
+  } else if (e.tool === WRAP_UP_TOOL) {
+    // The desktop app's closing step checks off the whole list.
+    await update($, tasksAtom, tasks => tasks.map(t => ({ ...t, status: 'completed' as const })))
   }
 }
 
