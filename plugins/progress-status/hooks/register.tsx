@@ -203,8 +203,39 @@ async function trackTasks($: EngineInterface, e: { tool: string }, ran: unknown)
 // asks Claude to keep one. Turned off with the plugin's keepTaskList setting.
 const TASK_LIST_SECTION = {
   id: 'progress-status:task-list',
-  text: 'When a request has 3 or more steps, keep a task list and update it as each step finishes.',
+  text:
+    'When a request has 3 or more steps, keep a task list and update it as each step finishes. ' +
+    'Use your task-list tool; if you have none, use mcp__progress-status__tasks.',
   scope: 'session',
+} as const
+
+// The plugin's own task-list tool, for sessions that have no other one.
+const OWN_TOOL = 'mcp__progress-status__tasks'
+const OWN_TOOL_SPEC = {
+  name: 'tasks',
+  description:
+    'Shows your task list as a progress bar above the prompt. Call it with the whole list when you plan a ' +
+    'request with several steps, and again each time a step starts or finishes. Mark exactly one step ' +
+    'in_progress while you work on it.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      items: {
+        type: 'array',
+        description: 'The whole task list, in order.',
+        items: {
+          type: 'object',
+          properties: {
+            content: { type: 'string', description: 'The step, as a short imperative phrase.' },
+            status: { type: 'string', enum: ['pending', 'in_progress', 'completed'] },
+          },
+          required: ['content', 'status'],
+        },
+      },
+    },
+    required: ['items'],
+  },
+  isDeferred: false,
 } as const
 
 export const register: Register = (on, options) => {
@@ -217,6 +248,11 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, e, next) => {
     const result = await next(e)
+    try {
+      await $.tool.register(OWN_TOOL_SPEC) // awaited here, so it is listed by the first prompt
+    } catch {
+      // the band still works with the session's own task tools
+    }
     await refreshUsage($)
     void autoSetup($) // in the background: the session doesn't wait on it
     return result
@@ -244,6 +280,14 @@ export const register: Register = (on, options) => {
   })
 
   on('tool.call', async ($, e, next) => {
+    // The plugin's own task-list tool: answered here, and not counted as a step.
+    if (e.tool === OWN_TOOL) {
+      const list = fromList((e as unknown as Record<string, unknown>).items)
+      if (!list) return { result: 'Send the whole task list as items: [{ content, status }].', isError: true }
+      if (!e.agentId) await update($, tasksAtom, () => list)
+      const done = list.filter(t => t.status === 'completed').length
+      return { result: `Progress updated: ${done}/${list.length} done.` }
+    }
     // Count the step as it starts, so the band names what is running now.
     if (!e.agentId) {
       const label = stepLabel(e as unknown as Record<string, unknown>)

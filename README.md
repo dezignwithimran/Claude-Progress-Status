@@ -81,6 +81,8 @@ The pills only fill when Claude keeps a task list, and Claude doesn't always mak
 
 > When a request has 3 or more steps, keep a task list and update it as each step finishes.
 
+Some sessions have no task-list tool at all, so the plugin also adds its own, `mcp__progress-status__tasks`. Claude uses it only when it has no other task-list tool.
+
 To turn it off, open `/plugin`, pick **progress-status**, and switch off **Ask Claude to keep a task list**. The Steps counter still shows progress without a list.
 
 ## Configure

@@ -199,3 +199,31 @@ test('keepTaskList off leaves the system prompt alone', { options: { keepTaskLis
   const { sections } = await $.prompt.compose(COMPOSE)
   expect(sections.map((s: any) => s.id)).toEqual(['intro'])
 })
+
+test('registers its own task-list tool on session start', async ($, on) => {
+  const registered: any[] = []
+  on('session.usage', usageAt(10_000))
+  on('session.start', ($: any, e: any) => ({ cwd: e.cwd }) as any)
+  on('tool.register', ($: any, e: any) => { registered.push(e); return { value: { tool: 'mcp__progress-status__tasks' } } as any })
+  on('process.run', () => ({ value: { exitCode: 0, stdout: 'refreshed\n', stderr: '' } }) as any)
+  await $.session.start({ source: 'startup', cwd: 'D:/work' } as any)
+  expect(registered.map(r => r.name)).toEqual(['tasks'])
+  expect(registered[0]?.isDeferred).toBe(false)
+})
+
+test('its own tool fills the pills with no other task tool in the session', async ($, on) => {
+  on('session.usage', usageAt(20_000))
+  // nothing beneath answers tool.call: the plugin must answer its own tool itself
+  const r: any = await $.tool.call({
+    tool: 'mcp__progress-status__tasks',
+    items: [
+      { content: 'Create index.html', status: 'completed' },
+      { content: 'Add styles.css', status: 'in_progress' },
+      { content: 'Write README.md', status: 'pending' },
+    ],
+  } as any)
+  expect(String(r.result)).toMatch(/1\/3 done/)
+  const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'desktop', ...BAND })
+  expect(await ui.find({ type: 'Text', text: '1/3' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'Add styles.css' })).toBeDefined()
+})
