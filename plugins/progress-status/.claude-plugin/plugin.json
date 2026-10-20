@@ -1,6 +1,6 @@
 {
   "name": "progress-status",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Task-progress bar (done/total) and context-window token bar (used/limit): a status line in the terminal, a band above the prompt in the desktop app.",
   "author": {
     "name": "Imran Haider"
@@ -18,6 +18,12 @@
       "type": "boolean",
       "title": "Ask Claude to keep a task list",
       "description": "Adds one line to Claude's instructions: when a request has 3 or more steps, keep a task list and update it as each step finishes, so the progress bar has something to show.",
+      "default": true
+    },
+    "autoPlan": {
+      "type": "boolean",
+      "title": "Make a task list when Claude has none",
+      "description": "When Claude works on a request without a task list, a small fast model splits the request into steps and shows them as pills. Costs one small extra model call per such request.",
       "default": true
     }
   }

@@ -47,8 +47,9 @@ function applyToolUse(state, block) {
   const name = String(block.name || '');
   const input = block.input || {};
 
-  if (name === 'TodoWrite') {
-    const todos = asArray(input.todos);
+  // TodoWrite, and the plugin's own task-list tool, send the whole list each time.
+  if (name === 'TodoWrite' || name === 'mcp__progress-status__tasks') {
+    const todos = asArray(name === 'TodoWrite' ? input.todos : input.items);
     if (!todos) return;
     state.tasks = [];
     state.nextId = 1;

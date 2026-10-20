@@ -83,7 +83,9 @@ The pills only fill when Claude keeps a task list, and Claude doesn't always mak
 
 Some sessions have no task-list tool at all, so the plugin also adds its own, `mcp__progress-status__tasks`. Claude uses it only when it has no other task-list tool.
 
-To turn it off, open `/plugin`, pick **progress-status**, and switch off **Ask Claude to keep a task list**. The Steps counter still shows progress without a list.
+If Claude still starts working without a list, the plugin makes one: after the second step, a small fast model (Haiku) splits your request into 3–6 steps and shows them as pills right away. Claude is shown that list and ticks the steps off as it works, and any it didn't tick turn green when the request finishes. That costs one small extra model call per such request. Turn it off with **Make a task list when Claude has none**.
+
+To turn the instruction off, open `/plugin`, pick **progress-status**, and switch off **Ask Claude to keep a task list**. The Steps counter still shows progress without a list.
 
 ## Configure
 

@@ -227,3 +227,75 @@ test('its own tool fills the pills with no other task tool in the session', asyn
   expect(await ui.find({ type: 'Text', text: '1/3' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: 'Add styles.css' })).toBeDefined()
 })
+
+const NO_LIST_TURN = async ($: any, on: any, plannerText: string) => {
+  const asks: any[] = []
+  on('session.usage', usageAt(30_000))
+  on('turn.start', ($: any, e: any) => ({ turnId: e.turnId }) as any)
+  on('turn.complete', () => ({ text: '' }) as any)
+  on('tool.call', () => ({ result: {} }))
+  on('model.complete', ($: any, e: any) => {
+    asks.push(e)
+    return { value: { isAnswered: true, text: plannerText, usage: { input_tokens: 50, output_tokens: 20, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } } as any
+  })
+  on('prompt.compose', () => ({ sections: [{ id: 'intro', text: 'You are Claude.', scope: 'shared' }] }) as any)
+  await $.turn.start({ text: 'Build a tip calculator page with styles, script and a README', turnId: 't1' } as any)
+  await $.tool.call({ tool: 'Write', file_path: 'D:/tip/index.html', content: 'x' } as any)
+  await $.tool.call({ tool: 'Write', file_path: 'D:/tip/styles.css', content: 'x' } as any)
+  for (let i = 0; i < 40 && asks.length === 0; i++) await new Promise(r => setTimeout(r, 5))
+  await new Promise(r => setTimeout(r, 20))
+  return asks
+}
+
+test('no task list after 2 steps: auto plan shows pills and is handed to Claude', async ($, on) => {
+  const asks = await NO_LIST_TURN($, on, '1. Create index.html\n2. Add styles.css\n- Write script.js\nWrite README.md')
+  expect(asks).toHaveLength(1)
+  expect(asks[0].model).toBe('haiku')
+  expect(asks[0].prompt).toMatch(/tip calculator/)
+
+  const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'desktop', ...BAND })
+  expect(await ui.find({ type: 'Text', text: '0/4' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'Create index.html' })).toBeDefined()
+  await ui.unmount()
+
+  const { sections } = await $.prompt.compose(COMPOSE)
+  const plan = sections.find((s: any) => s.id === 'progress-status:auto-plan')
+  expect(plan?.text).toMatch(/2\. Add styles\.css/)
+  expect(plan?.text).toMatch(/mcp__progress-status__tasks/)
+
+  // Claude ticks it off with the plugin's tool
+  await $.tool.call({ tool: 'mcp__progress-status__tasks', items: [
+    { content: 'Create index.html', status: 'completed' },
+    { content: 'Add styles.css', status: 'completed' },
+    { content: 'Write script.js', status: 'in_progress' },
+    { content: 'Write README.md', status: 'pending' },
+  ] } as any)
+  const ticked = await $.ui.mount({ plugin: PLUGIN, surface: 'desktop', ...BAND })
+  expect(await ticked.find({ type: 'Text', text: '2/4' })).toBeDefined()
+})
+
+test('auto plan Claude never ticks turns green when the request ends', async ($, on) => {
+  await NO_LIST_TURN($, on, 'Create index.html\nAdd styles.css\nWrite README.md')
+  await $.turn.complete({ reason: 'answer', answer: 'Done.', turnId: 't1' } as any)
+  const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'desktop', ...BAND })
+  expect(await ui.find({ type: 'Text', text: '3/3' })).toBeDefined()
+})
+
+test('no auto plan when Claude keeps its own list', async ($, on) => {
+  const asks: any[] = []
+  on('session.usage', usageAt(30_000))
+  on('turn.start', ($: any, e: any) => ({ turnId: e.turnId }) as any)
+  on('tool.call', () => ({ result: {} }))
+  on('model.complete', ($: any, e: any) => { asks.push(e); return { isAnswered: true, text: 'a\nb\nc', usage: {} } as any })
+  await $.turn.start({ text: 'Do three things', turnId: 't1' } as any)
+  await $.tool.call({ tool: 'mcp__progress-status__tasks', items: [{ content: 'One', status: 'in_progress' }, { content: 'Two', status: 'pending' }] } as any)
+  await $.tool.call({ tool: 'Write', file_path: 'a', content: 'x' } as any)
+  await $.tool.call({ tool: 'Write', file_path: 'b', content: 'x' } as any)
+  await new Promise(r => setTimeout(r, 30))
+  expect(asks).toHaveLength(0)
+})
+
+test('autoPlan off: no planner call', { options: { autoPlan: false } }, async ($, on) => {
+  const asks = await NO_LIST_TURN($, on, 'a\nb\nc')
+  expect(asks).toHaveLength(0)
+})

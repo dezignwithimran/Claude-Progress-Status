@@ -238,13 +238,73 @@ const OWN_TOOL_SPEC = {
   isDeferred: false,
 } as const
 
-export const register: Register = (on, options) => {
-  if (options.keepTaskList !== false) {
-    on('prompt.compose', async ($, e, next) => {
-      const { sections } = await next(e)
-      return { sections: [...sections, TASK_LIST_SECTION] }
+// ---- Auto plan: pills for requests Claude works on without a task list ----
+
+const TASK_TOOLS = new Set(['TodoWrite', 'TaskCreate', 'TaskUpdate', PLAN_TOOL, OWN_TOOL])
+const AUTO_PLAN_AFTER_STEPS = 2
+const PLANNER_SYSTEM =
+  'You split a request someone gave a coding assistant into the steps the assistant will take. ' +
+  'Answer with 3 to 6 lines, one step per line, each a short imperative phrase of at most 8 words. ' +
+  'No numbering, no bullets, no other text.'
+
+// What the plugin knows about the request in progress (module state; a reload starts it over).
+const turn = { request: '', isListed: false, isPlanning: false, plan: null as string[] | null }
+
+function parsePlan(text: string): string[] | null {
+  const steps = text
+    .split(/\r?\n/)
+    .map(l => l.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim())
+    .filter(l => l.length > 0 && l.length <= 80)
+    .slice(0, 6)
+  return steps.length >= 2 ? steps : null
+}
+
+// Asks a small fast model to split the request into steps, and shows them as pills.
+async function makePlan($: EngineInterface) {
+  turn.isPlanning = true
+  try {
+    const reply = await $.model.complete({
+      model: 'haiku',
+      system: PLANNER_SYSTEM,
+      prompt: `Request:\n${turn.request.slice(0, 4000)}`,
+      maxTokens: 200,
+      timeoutMs: 20_000,
     })
+    const steps = reply.isAnswered ? parsePlan(reply.text) : null
+    if (!steps || turn.isListed) return // Claude made its own list meanwhile
+    turn.plan = steps
+    await update($, tasksAtom, () =>
+      steps.map((label, i) => ({ id: String(i + 1), label, status: i === 0 ? ('in_progress' as const) : ('pending' as const) })),
+    )
+  } catch {
+    // no plan this time; the Steps counter still shows progress
+  } finally {
+    turn.isPlanning = false
   }
+}
+
+function planSection(plan: string[]) {
+  return {
+    id: 'progress-status:auto-plan',
+    text:
+      'The user sees this task list for the current request as a progress bar:\n' +
+      plan.map((s, i) => `${i + 1}. ${s}`).join('\n') +
+      '\nAs each step finishes, call mcp__progress-status__tasks with the whole list and updated statuses ' +
+      '(you may reword, add or drop steps so it matches your actual work).',
+    scope: 'session' as const,
+  }
+}
+
+export const register: Register = (on, options) => {
+  const isAutoPlanOn = options.autoPlan !== false
+
+  on('prompt.compose', async ($, e, next) => {
+    const { sections } = await next(e)
+    const added = []
+    if (options.keepTaskList !== false) added.push(TASK_LIST_SECTION)
+    if (turn.plan && !turn.isListed) added.push(planSection(turn.plan))
+    return added.length ? { sections: [...sections, ...added] } : { sections }
+  })
 
   on('session.start', async ($, e, next) => {
     const result = await next(e)
@@ -261,7 +321,10 @@ export const register: Register = (on, options) => {
   // A new request starts its step count over.
   on('turn.start', async ($, e, next) => {
     // The task list stays until Claude makes a new one; only the step count starts over.
-    await update($, activityAtom, () => ({ steps: 0, last: null, isWorking: true }))
+    if (!e.agentId) {
+      Object.assign(turn, { request: String(e.text ?? ''), isListed: false, plan: null })
+      await update($, activityAtom, () => ({ steps: 0, last: null, isWorking: true }))
+    }
     return next(e)
   })
 
@@ -274,6 +337,11 @@ export const register: Register = (on, options) => {
 
   on('turn.complete', async ($, e, next) => {
     const result = await next(e)
+    // An auto plan Claude didn't tick off: the request is done, so is its list.
+    if (turn.plan && !turn.isListed) {
+      await update($, tasksAtom, tasks => tasks.map(t => ({ ...t, status: 'completed' as const })))
+      turn.plan = null
+    }
     await update($, activityAtom, a => ({ ...a, isWorking: false }))
     await refreshUsage($)
     return result
@@ -284,14 +352,22 @@ export const register: Register = (on, options) => {
     if (e.tool === OWN_TOOL) {
       const list = fromList((e as unknown as Record<string, unknown>).items)
       if (!list) return { result: 'Send the whole task list as items: [{ content, status }].', isError: true }
-      if (!e.agentId) await update($, tasksAtom, () => list)
+      if (!e.agentId) {
+        turn.isListed = true // Claude keeps the list now, auto plan or not
+        await update($, tasksAtom, () => list)
+      }
       const done = list.filter(t => t.status === 'completed').length
       return { result: `Progress updated: ${done}/${list.length} done.` }
     }
+    if (!e.agentId && TASK_TOOLS.has(e.tool)) turn.isListed = true
     // Count the step as it starts, so the band names what is running now.
     if (!e.agentId) {
       const label = stepLabel(e as unknown as Record<string, unknown>)
       await update($, activityAtom, a => ({ steps: a.steps + 1, last: label, isWorking: true }))
+      const { steps } = await read($, activityAtom)
+      if (isAutoPlanOn && !turn.isListed && !turn.plan && !turn.isPlanning && steps >= AUTO_PLAN_AFTER_STEPS && turn.request) {
+        void makePlan($) // in the background: the tool call doesn't wait on it
+      }
     }
     const ran = await next(e)
     if (e.agentId || ran.deny !== undefined || ('isError' in ran && ran.isError)) return ran

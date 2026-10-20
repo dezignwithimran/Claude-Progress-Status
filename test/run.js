@@ -76,6 +76,12 @@ test('TodoWrite partial progress', () => {
   assert.match(out, /Tasks ██████░░░░ 3\/5 60%/);
 });
 
+test("the plugin's own task tool shows in the terminal too", () => {
+  const items = [{ content: 'a', status: 'completed' }, { content: 'b', status: 'in_progress' }, { content: 'c', status: 'pending' }];
+  const t = transcript('own', [assistant([toolUse('o1', 'mcp__progress-status__tasks', { items })], usage(5000))]);
+  assert.match(run({ model, transcript_path: t }), /Tasks ███░░░░░░░ 1\/3 33%/);
+});
+
 test('TaskCreate (stringified list) + TaskUpdate to all done', () => {
   const list = JSON.stringify([{ content: 'x', status: 'in_progress' }, { content: 'y', status: 'pending' }]);
   const t = transcript('tasks', [
