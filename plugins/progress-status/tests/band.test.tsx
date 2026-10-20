@@ -146,3 +146,19 @@ test('desktop wrap-up checks off the whole list', async ($, on) => {
   const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'desktop', ...BAND })
   expect(await ui.find({ type: 'Text', text: '3/3' })).toBeDefined()
 })
+
+test('a finished list stays next to the new request\'s steps', async ($, on) => {
+  on('session.usage', usageAt(20_000))
+  on('turn.start', ($: any, e: any) => ({ turnId: e.turnId }) as any)
+  on('tool.call', () => ({ result: {} }))
+  await $.tool.call({
+    tool: 'mcp__ccd_turn__update_plan',
+    items: [1, 2, 3].map(i => ({ content: `Step ${i}`, status: 'completed' })),
+  })
+  await $.turn.start({ text: 'quick fix', turnId: 't2' } as any)
+  await $.tool.call({ tool: 'Edit', file_path: 'D:/app/README.md', old_string: 'a', new_string: 'b' } as any)
+  const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'desktop', ...BAND })
+  expect(await ui.find({ type: 'Text', text: '3/3' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'Steps' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '· Edit README.md' })).toBeDefined()
+})

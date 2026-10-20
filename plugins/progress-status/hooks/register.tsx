@@ -192,9 +192,8 @@ export const register: Register = on => {
 
   // A new request starts its step count over.
   on('turn.start', async ($, e, next) => {
+    // The task list stays until Claude makes a new one; only the step count starts over.
     await update($, activityAtom, () => ({ steps: 0, last: null, isWorking: true }))
-    // A finished list belongs to the last request; clear it so this one starts fresh.
-    await update($, tasksAtom, tasks => (tasks.length && tasks.every(t => t.status === 'completed') ? [] : tasks))
     return next(e)
   })
 
@@ -250,20 +249,9 @@ export const register: Register = on => {
     return (
       <Box flexDirection="row" alignItems="center" columnGap={3} flexWrap="wrap">
         <Box flexDirection="row" alignItems="center" columnGap={1}>
-          <Text dimColor size="footnote">{tasks.length === 0 && activity.steps > 0 ? 'Steps' : 'Tasks'}</Text>
+          <Text dimColor size="footnote">Tasks</Text>
           {tasks.length === 0 ? (
-            activity.steps > 0 ? (
-              [
-                <Text key="steps-count" size="footnote" weight="medium" tabular>{String(activity.steps)}</Text>,
-                activity.isWorking && activity.last ? (
-                  <Text key="steps-now" dimColor size="footnote" wrap="truncate">{`· ${activity.last}`}</Text>
-                ) : (
-                  <Text key="steps-done" size="footnote" color="success">done</Text>
-                ),
-              ]
-            ) : (
-              <Text dimColor size="footnote">none yet</Text>
-            )
+            <Text dimColor size="footnote">none yet</Text>
           ) : (
             [
               <Svg
@@ -280,6 +268,17 @@ export const register: Register = on => {
             <Text dimColor size="footnote" wrap="truncate">{current.label}</Text>
           ) : null}
         </Box>
+        {activity.steps > 0 ? (
+          <Box flexDirection="row" alignItems="center" columnGap={1}>
+            <Text dimColor size="footnote">Steps</Text>
+            <Text size="footnote" weight="medium" tabular>{String(activity.steps)}</Text>
+            {activity.isWorking && activity.last ? (
+              <Text dimColor size="footnote" wrap="truncate">{`· ${activity.last}`}</Text>
+            ) : (
+              <Text size="footnote" color="success">done</Text>
+            )}
+          </Box>
+        ) : null}
         <Box flexDirection="row" alignItems="center" columnGap={1}>
           <Svg source={ringSvg(ratio)} alt={`Context ${pct}% full`} width={RING_SIZE} height={RING_SIZE} />
           <Text dimColor size="footnote">Context</Text>
