@@ -170,5 +170,35 @@ test('setup install / uninstall round trip', () => {
   assert.deepStrictEqual(JSON.parse(fs.readFileSync(settingsFile, 'utf8')), original);
 });
 
+test('auto: installs, refreshes, respects remove and other status lines', () => {
+  const cfgDir = path.join(tmp, 'claude-auto');
+  fs.mkdirSync(cfgDir);
+  const settingsFile = path.join(cfgDir, 'settings.json');
+  const e = { ...env, CLAUDE_CONFIG_DIR: cfgDir };
+  const auto = () => execFileSync('node', [SETUP, 'auto'], { env: e }).toString().trim().split(/\r?\n/).pop();
+  const settings = () => JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+
+  fs.writeFileSync(settingsFile, JSON.stringify({ theme: 'dark' }));
+  assert.strictEqual(auto(), 'installed');
+  assert.match(settings().statusLine.command, /progress-status/);
+  assert.strictEqual(settings().theme, 'dark');
+
+  fs.unlinkSync(path.join(cfgDir, 'progress-status', 'statusline.js'));
+  assert.strictEqual(auto(), 'refreshed');
+  assert.ok(fs.existsSync(path.join(cfgDir, 'progress-status', 'statusline.js')));
+
+  execFileSync('node', [SETUP, 'uninstall'], { env: e });
+  assert.strictEqual(auto(), 'opted-out');
+  assert.strictEqual(settings().statusLine, undefined);
+
+  execFileSync('node', [SETUP, 'install'], { env: e });
+  assert.strictEqual(auto(), 'refreshed'); // setup clears the opt-out
+
+  const other = { type: 'command', command: 'echo mine' };
+  fs.writeFileSync(settingsFile, JSON.stringify({ statusLine: other }));
+  assert.strictEqual(auto(), 'other');
+  assert.deepStrictEqual(settings().statusLine, other);
+});
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(`\n${passed} passed`);

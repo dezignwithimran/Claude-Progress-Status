@@ -33,13 +33,11 @@ git clone https://github.com/dezignwithimran/claude-progress-status.git
 claude plugin marketplace add ./claude-progress-status
 ```
 
-Then, inside Claude Code, turn it on:
+That's it. The plugin turns itself on the first time you start a Claude Code session: it copies the status line script to `~/.claude/progress-status/` and sets `statusLine` in `~/.claude/settings.json`. A short "terminal status line turned on" message confirms it. On later sessions it keeps that copied script up to date with the plugin.
 
-```
-/progress-status:setup
-```
+It never replaces a status line you already have. To switch from yours to this one, run `/progress-status:setup`: your old one is saved and comes back with `/progress-status:remove`. After `/progress-status:remove`, the plugin stays off until you run `/progress-status:setup` again.
 
-This copies the script to `~/.claude/progress-status/` and sets `statusLine` in `~/.claude/settings.json`. If you already had a status line, it is saved and comes back when you run `/progress-status:remove`.
+Automatic setup needs Node.js on your PATH. Without it, the desktop band still works.
 
 ## In the Claude desktop app
 

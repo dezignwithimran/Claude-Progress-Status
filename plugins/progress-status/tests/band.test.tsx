@@ -162,3 +162,24 @@ test('a finished list stays next to the new request\'s steps', async ($, on) => 
   expect(await ui.find({ type: 'Text', text: 'Steps' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: '· Edit README.md' })).toBeDefined()
 })
+
+test('session start runs setup.js auto and says when it turned the status line on', async ($, on) => {
+  const runs: string[][] = []
+  const toasts: string[] = []
+  on('session.usage', usageAt(10_000))
+  on('session.start', ($: any, e: any) => ({ cwd: e.cwd }) as any)
+  on('process.run', ($: any, e: any) => {
+    runs.push([...e.argv])
+    return { value: { exitCode: 0, stdout: 'Installed. statusLine -> ...\ninstalled\n', stderr: '' } } as any
+  })
+  on('ui.toast', ($: any, e: any) => { toasts.push(e.text); return { value: undefined } as any })
+
+  await $.session.start({ source: 'startup', cwd: 'D:/work' } as any)
+  for (let i = 0; i < 20 && toasts.length === 0; i++) await new Promise(r => setTimeout(r, 5))
+
+  expect(runs).toHaveLength(1)
+  expect(runs[0]?.[0]).toBe('node')
+  expect(runs[0]?.[1]).toMatch(/scripts\/setup\.js$/)
+  expect(runs[0]?.[2]).toBe('auto')
+  expect(toasts).toEqual(['progress-status: terminal status line turned on'])
+})

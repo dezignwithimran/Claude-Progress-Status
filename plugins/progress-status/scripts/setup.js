@@ -5,6 +5,7 @@
 //   node setup.js install    copy the script to ~/.claude/progress-status and point statusLine at it
 //   node setup.js uninstall  restore the previous statusLine (or remove it)
 //   node setup.js status     show what is configured now
+//   node setup.js auto       what the plugin runs on session start: install unless turned off or another statusLine is set
 //   node setup.js demo [on|off]  cycle the status line through sample values (toggles with no arg)
 
 const fs = require('fs');
@@ -16,6 +17,7 @@ const CLAUDE_DIR = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.cl
 const SETTINGS = path.join(CLAUDE_DIR, 'settings.json');
 const INSTALL_DIR = path.join(CLAUDE_DIR, 'progress-status');
 const BACKUP = path.join(INSTALL_DIR, 'previous-statusline.json');
+const OPT_OUT = path.join(INSTALL_DIR, 'turned-off');
 const MARKER = 'progress-status';
 
 function toPosix(p) {
@@ -50,7 +52,8 @@ function isOurs(statusLine) {
   return !!(statusLine && typeof statusLine.command === 'string' && statusLine.command.includes(MARKER));
 }
 
-function install() {
+// Copies this plugin version's status line script to the fixed install folder.
+function copyScripts() {
   const scripts = path.join(PLUGIN_ROOT, 'scripts');
   fs.mkdirSync(INSTALL_DIR, { recursive: true });
   fs.copyFileSync(path.join(scripts, 'statusline.js'), path.join(INSTALL_DIR, 'statusline.js'));
@@ -60,6 +63,12 @@ function install() {
   if (!fs.existsSync(configPath)) {
     fs.copyFileSync(path.join(PLUGIN_ROOT, 'config.example.json'), configPath);
   }
+  return configPath;
+}
+
+function install() {
+  const configPath = copyScripts();
+  if (fs.existsSync(OPT_OUT)) fs.unlinkSync(OPT_OUT);
 
   const settings = readSettings();
   if (settings.statusLine && !isOurs(settings.statusLine)) {
@@ -91,7 +100,24 @@ function uninstall() {
     console.log('Removed the statusLine setting.');
   }
   writeSettings(settings);
+  // Remember the choice, so automatic setup on session start leaves it off.
+  fs.mkdirSync(INSTALL_DIR, { recursive: true });
+  fs.writeFileSync(OPT_OUT, 'Turned off with /progress-status:remove. /progress-status:setup turns it back on.\n');
   console.log(`Script files are still in ${INSTALL_DIR} (your config.json is kept). Delete that folder if you no longer need it.`);
+}
+
+// Run by the plugin on every session start. Prints one word first: installed,
+// refreshed, opted-out or other (another status line is set and is left alone).
+function auto() {
+  if (fs.existsSync(OPT_OUT)) return console.log('opted-out');
+  const settings = readSettings();
+  if (isOurs(settings.statusLine)) {
+    copyScripts();
+    return console.log('refreshed');
+  }
+  if (settings.statusLine) return console.log('other');
+  install();
+  console.log('installed');
 }
 
 function demo(mode) {
@@ -126,8 +152,9 @@ try {
   else if (cmd === 'uninstall' || cmd === 'remove') uninstall();
   else if (cmd === 'status') status();
   else if (cmd === 'demo') demo(process.argv[3]);
+  else if (cmd === 'auto') auto();
   else {
-    console.error(`Unknown command "${cmd}". Use install | uninstall | status | demo [on|off].`);
+    console.error(`Unknown command "${cmd}". Use install | uninstall | status | demo [on|off] | auto.`);
     process.exit(1);
   }
 } catch (err) {

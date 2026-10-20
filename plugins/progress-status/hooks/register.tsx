@@ -144,6 +144,22 @@ function ringSvg(ratio: number): string {
   )
 }
 
+// Turns the terminal status line on without /progress-status:setup, and keeps its
+// copied script current with the plugin. setup.js leaves alone a status line that
+// isn't ours, and one the person turned off with /progress-status:remove.
+async function autoSetup($: EngineInterface) {
+  try {
+    const script = `${$.plugin.root}/scripts/setup.js`.replace(/\\/g, '/')
+    const { exitCode, stdout } = await $.process.run(['node', script, 'auto'], { timeoutMs: 15_000 })
+    const outcome = stdout.trim().split(/\r?\n/).pop()
+    if (exitCode === 0 && outcome === 'installed') {
+      $.ui.toast('progress-status: terminal status line turned on')
+    }
+  } catch {
+    // No Node on PATH, or settings.json unreadable: /progress-status:setup still works.
+  }
+}
+
 // Best-effort: a usage reading that fails must not lose a task update.
 async function refreshUsage($: EngineInterface) {
   try {
@@ -187,6 +203,7 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const result = await next(e)
     await refreshUsage($)
+    void autoSetup($) // in the background: the session doesn't wait on it
     return result
   })
 
