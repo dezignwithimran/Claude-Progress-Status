@@ -1,6 +1,6 @@
 {
   "name": "progress-status",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Task-progress bar (done/total) and context-window token bar (used/limit): a status line in the terminal, a band above the prompt in the desktop app.",
   "author": {
     "name": "Imran Haider"
@@ -25,6 +25,22 @@
       "title": "Make a task list when Claude has none",
       "description": "When Claude works on a request without a task list, a small fast model splits the request into steps and shows them as pills. Costs one small extra model call per such request.",
       "default": true
+    },
+    "amberAt": {
+      "type": "number",
+      "title": "Context turns amber at (%)",
+      "description": "The Context bar and ring turn amber from this percent of the context window. Default 50.",
+      "default": 50,
+      "min": 1,
+      "max": 99
+    },
+    "redAt": {
+      "type": "number",
+      "title": "Context turns red at (%)",
+      "description": "The Context bar and ring turn red from this percent. Must be higher than the amber point, or both go back to 50 and 80. Default 80.",
+      "default": 80,
+      "min": 2,
+      "max": 100
     }
   }
 }

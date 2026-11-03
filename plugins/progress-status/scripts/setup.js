@@ -5,7 +5,7 @@
 //   node setup.js install    copy the script to ~/.claude/progress-status and point statusLine at it
 //   node setup.js uninstall  restore the previous statusLine (or remove it)
 //   node setup.js status     show what is configured now
-//   node setup.js auto       what the plugin runs on session start: install unless turned off or another statusLine is set
+//   node setup.js auto [--amber N --red N]  what the plugin runs on session start: install unless turned off or another statusLine is set
 //   node setup.js demo [on|off]  cycle the status line through sample values (toggles with no arg)
 
 const fs = require('fs');
@@ -108,15 +108,38 @@ function uninstall() {
 
 // Run by the plugin on every session start. Prints one word first: installed,
 // refreshed, opted-out or other (another status line is set and is left alone).
-function auto() {
+// --amber N --red N carry the plugin's color settings; they are copied into config.json
+// so the status line (a separate script) uses the same points as the desktop band.
+function writeThresholds(args) {
+  const get = (flag) => {
+    const i = args.indexOf(flag);
+    return i >= 0 ? Number(args[i + 1]) : NaN;
+  };
+  const amberAt = get('--amber');
+  const redAt = get('--red');
+  if (!Number.isFinite(amberAt) || !Number.isFinite(redAt)) return;
+  const configPath = path.join(INSTALL_DIR, 'config.json');
+  let cfg = {};
+  try {
+    cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  } catch {
+    // start from an empty config
+  }
+  if (cfg.amberAt === amberAt && cfg.redAt === redAt) return;
+  fs.writeFileSync(configPath, JSON.stringify({ ...cfg, amberAt, redAt }, null, 2) + '\n');
+}
+
+function auto(args = []) {
   if (fs.existsSync(OPT_OUT)) return console.log('opted-out');
   const settings = readSettings();
   if (isOurs(settings.statusLine)) {
     copyScripts();
+    writeThresholds(args);
     return console.log('refreshed');
   }
   if (settings.statusLine) return console.log('other');
   install();
+  writeThresholds(args);
   console.log('installed');
 }
 
@@ -152,7 +175,7 @@ try {
   else if (cmd === 'uninstall' || cmd === 'remove') uninstall();
   else if (cmd === 'status') status();
   else if (cmd === 'demo') demo(process.argv[3]);
-  else if (cmd === 'auto') auto();
+  else if (cmd === 'auto') auto(process.argv.slice(3));
   else {
     console.error(`Unknown command "${cmd}". Use install | uninstall | status | demo [on|off] | auto.`);
     process.exit(1);

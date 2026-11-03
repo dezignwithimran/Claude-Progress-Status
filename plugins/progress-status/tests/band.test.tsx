@@ -299,3 +299,43 @@ test('autoPlan off: no planner call', { options: { autoPlan: false } }, async ($
   const asks = await NO_LIST_TURN($, on, 'a\nb\nc')
   expect(asks).toHaveLength(0)
 })
+
+// Context at `tokens` of 200k: the colour the band gives the percent text.
+const pctColor = async ($: any, on: any, tokens: number) => {
+  on('session.usage', usageAt(tokens))
+  on('tool.call', () => ({ result: {} }))
+  await $.tool.call({ tool: 'Read', file_path: 'a.md' } as any)
+  const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'desktop', ...BAND })
+  const hit = (await ui.findAll({ type: 'Text' })).find((t: any) => /^\d+%$/.test(String(t.text)))
+  return (hit?.props as any)?.color
+}
+
+test('thresholds default to 50 and 80', async ($, on) => {
+  expect(await pctColor($, on, 99_000)).toBe('success') // 49.5% shows as 50%, still below 50
+})
+
+test('default: 50% is amber and 80% is red', async ($, on) => {
+  expect(await pctColor($, on, 100_000)).toBe('warning')
+})
+
+test('amberAt 30 and redAt 60 move the colour changes', { options: { amberAt: 30, redAt: 60 } }, async ($, on) => {
+  expect(await pctColor($, on, 80_000)).toBe('warning') // 40%: amber under the new points, green under the defaults
+})
+
+test('red at the red point', { options: { amberAt: 30, redAt: 60 } }, async ($, on) => {
+  expect(await pctColor($, on, 130_000)).toBe('error') // 65%: red under the new points, amber under the defaults
+})
+
+test('red below amber falls back to the defaults', { options: { amberAt: 90, redAt: 40 } }, async ($, on) => {
+  expect(await pctColor($, on, 80_000)).toBe('success') // 40%: green under the defaults
+})
+
+test('session start passes the color points to setup.js', { options: { amberAt: 30, redAt: 60 } }, async ($, on) => {
+  const runs: string[][] = []
+  on('session.usage', usageAt(10_000))
+  on('session.start', ($: any, e: any) => ({ cwd: e.cwd }) as any)
+  on('process.run', ($: any, e: any) => { runs.push([...e.argv]); return { value: { exitCode: 0, stdout: 'refreshed\n', stderr: '' } } as any })
+  on('tool.register', () => ({ value: { tool: 'mcp__progress-status__tasks' } }) as any)
+  await $.session.start({ source: 'startup', cwd: 'D:/work' } as any)
+  expect(runs[0]?.slice(2)).toEqual(['auto', '--amber', '30', '--red', '60'])
+})

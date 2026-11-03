@@ -87,6 +87,14 @@ If Claude still starts working without a list, the plugin makes one: after the s
 
 To turn the instruction off, open `/plugin`, pick **progress-status**, and switch off **Ask Claude to keep a task list**. The Steps counter still shows progress without a list.
 
+## Context colors
+
+The Context bar and ring are green below the amber point, amber from there, and red from the red point. The defaults are **50%** and **80%**. To change them, open `/plugin`, pick **progress-status**, and set **Context turns amber at (%)** and **Context turns red at (%)**.
+
+- It applies to both the desktop band and the terminal status line. The terminal picks the new points up when a session starts.
+- Red must be higher than amber. If it isn't, or a value is out of range, both go back to 50 and 80.
+- Examples: `30` and `60` for early warning, `70` and `90` for long sessions.
+
 ## Configure
 
 Edit `~/.claude/progress-status/config.json`:
@@ -101,6 +109,7 @@ Edit `~/.claude/progress-status/config.json`:
 | `showContext` | `true` | Show the context bar |
 | `separator` | `" │ "` | Text between sections |
 | `demo` | `false` | Show cycling sample values (see above) |
+| `amberAt`, `redAt` | `50`, `80` | Set from `/plugin` (see Context colors); copied here for the terminal |
 
 ## How it works
 

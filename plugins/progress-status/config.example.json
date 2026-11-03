@@ -6,5 +6,7 @@
   "showCurrentTask": false,
   "showContext": true,
   "separator": " │ ",
-  "demo": false
+  "demo": false,
+  "amberAt": 50,
+  "redAt": 80
 }

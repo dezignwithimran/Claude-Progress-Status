@@ -80,9 +80,25 @@ function clamp01(n: number): number {
   return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0
 }
 
+// Where the Context color changes, in whole percents: the amberAt and redAt settings.
+// Anything out of range, or red not above amber, gives the defaults (50 and 80).
+const DEFAULT_AMBER_AT = 50
+const DEFAULT_RED_AT = 80
+let amberAt = DEFAULT_AMBER_AT
+let redAt = DEFAULT_RED_AT
+
+function setThresholds(amber: unknown, red: unknown) {
+  const ok = (n: number) => Number.isFinite(n) && n >= 1 && n <= 100
+  const a = Number(amber)
+  const r = Number(red)
+  const isValid = ok(a) && ok(r) && a < r
+  amberAt = isValid ? a : DEFAULT_AMBER_AT
+  redAt = isValid ? r : DEFAULT_RED_AT
+}
+
 function usageColor(ratio: number) {
-  if (ratio > 0.8) return 'error' as const
-  if (ratio >= 0.5) return 'warning' as const
+  if (ratio * 100 >= redAt) return 'error' as const
+  if (ratio * 100 >= amberAt) return 'warning' as const
   return 'success' as const
 }
 
@@ -150,7 +166,9 @@ function ringSvg(ratio: number): string {
 async function autoSetup($: EngineInterface) {
   try {
     const script = `${$.plugin.root}/scripts/setup.js`.replace(/\\/g, '/')
-    const { exitCode, stdout } = await $.process.run(['node', script, 'auto'], { timeoutMs: 15_000 })
+    const { exitCode, stdout } = await $.process.run(['node', script, 'auto', '--amber', String(amberAt), '--red', String(redAt)], {
+      timeoutMs: 15_000,
+    })
     const outcome = stdout.trim().split(/\r?\n/).pop()
     if (exitCode === 0 && outcome === 'installed') {
       $.ui.toast('progress-status: terminal status line turned on')
@@ -297,6 +315,7 @@ function planSection(plan: string[]) {
 
 export const register: Register = (on, options) => {
   const isAutoPlanOn = options.autoPlan !== false
+  setThresholds(options.amberAt, options.redAt)
 
   on('prompt.compose', async ($, e, next) => {
     const { sections } = await next(e)

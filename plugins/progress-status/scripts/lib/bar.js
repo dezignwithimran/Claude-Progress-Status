@@ -16,9 +16,22 @@ function paint(text, color, useColor) {
 }
 
 // Green < 50%, yellow 50–80%, red > 80%. Used for "how full" meters like context.
-function usageColor(ratio) {
-  if (ratio > 0.8) return 'red';
-  if (ratio >= 0.5) return 'yellow';
+const DEFAULT_THRESHOLDS = { amber: 0.5, red: 0.8 };
+
+// amberAt / redAt are whole percents (1 to 100) with amber below red. Anything
+// else, such as a typo or red set under amber, gives the defaults.
+function normalizeThresholds(amberAt, redAt) {
+  const ok = (n) => Number.isFinite(n) && n >= 1 && n <= 100;
+  const a = Number(amberAt);
+  const r = Number(redAt);
+  if (!ok(a) || !ok(r) || a >= r) return DEFAULT_THRESHOLDS;
+  return { amber: a / 100, red: r / 100 };
+}
+
+// Green below amber, yellow from amber, red from red.
+function usageColor(ratio, t = DEFAULT_THRESHOLDS) {
+  if (ratio >= t.red) return 'red';
+  if (ratio >= t.amber) return 'yellow';
   return 'green';
 }
 
@@ -56,4 +69,4 @@ function percent(ratio) {
   return `${Math.round(clamp01(ratio) * 100)}%`;
 }
 
-module.exports = { ANSI, paint, usageColor, progressColor, renderBar, formatTokens, percent };
+module.exports = { ANSI, paint, usageColor, normalizeThresholds, DEFAULT_THRESHOLDS, progressColor, renderBar, formatTokens, percent };

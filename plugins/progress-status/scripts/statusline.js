@@ -9,7 +9,7 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 
-const { renderBar, paint, usageColor, progressColor, formatTokens, percent } = require('./lib/bar');
+const { renderBar, paint, usageColor, normalizeThresholds, progressColor, formatTokens, percent } = require('./lib/bar');
 const { contextTokens } = require('./lib/tokens');
 const { scanTranscript, taskProgress } = require('./lib/tasks');
 
@@ -22,6 +22,8 @@ const DEFAULTS = {
   showContext: true,
   separator: ' │ ',
   demo: false,
+  amberAt: 50,
+  redAt: 80,
 };
 
 function loadConfig() {
@@ -137,8 +139,9 @@ function render(input, cfg) {
       parts.push(`Context ${renderBar(0, { width: cfg.barWidth, useColor: c })} 0/${formatTokens(limit)}`);
     } else {
       const ratio = used / limit;
-      const bar = renderBar(ratio, { width: cfg.barWidth, color: usageColor(ratio), useColor: c });
-      const pct = paint(percent(ratio), usageColor(ratio), c);
+      const level = usageColor(ratio, normalizeThresholds(cfg.amberAt, cfg.redAt));
+      const bar = renderBar(ratio, { width: cfg.barWidth, color: level, useColor: c });
+      const pct = paint(percent(ratio), level, c);
       parts.push(`Context ${bar} ${formatTokens(used)}/${formatTokens(limit)} ${pct}`);
     }
   }

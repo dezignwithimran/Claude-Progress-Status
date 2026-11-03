@@ -140,6 +140,38 @@ test('demo mode cycles through all four stages', () => {
   assert.match(outs[4], /1\/4 25%/); // wraps around
 });
 
+// The percent is painted with the level's color: green 32, yellow 33, red 31.
+function pctCode(tokens, config) {
+  const cfgFile = path.join(tmp, `cfg-${Math.random().toString(36).slice(2)}.json`);
+  fs.writeFileSync(cfgFile, JSON.stringify(config));
+  const input = { model, context_window: { context_window_size: 200000, current_usage: { input_tokens: tokens } } };
+  const out = execFileSync('node', [STATUSLINE], {
+    input: JSON.stringify(input),
+    env: { ...env, NO_COLOR: '', PROGRESS_STATUS_CONFIG: cfgFile },
+  }).toString();
+  const m = out.match(/\x1b\[(\d+)m\d+%/);
+  return m && m[1];
+}
+
+test('color points: defaults are 50 and 80', () => {
+  assert.strictEqual(pctCode(60000, {}), '32'); // 30% green
+  assert.strictEqual(pctCode(100000, {}), '33'); // 50% yellow
+  assert.strictEqual(pctCode(160000, {}), '31'); // 80% red
+});
+
+test('color points: amberAt and redAt move them', () => {
+  const cfg = { amberAt: 30, redAt: 60 };
+  assert.strictEqual(pctCode(40000, cfg), '32'); // 20% green
+  assert.strictEqual(pctCode(80000, cfg), '33'); // 40% yellow (green by default)
+  assert.strictEqual(pctCode(130000, cfg), '31'); // 65% red (yellow by default)
+});
+
+test('color points: red below amber or junk falls back to the defaults', () => {
+  assert.strictEqual(pctCode(80000, { amberAt: 90, redAt: 40 }), '32'); // 40% green
+  assert.strictEqual(pctCode(100000, { amberAt: 'x', redAt: 80 }), '33'); // 50% yellow
+  assert.strictEqual(pctCode(100000, { amberAt: 0, redAt: 200 }), '33');
+});
+
 test('garbage stdin still prints a line', () => {
   const out = execFileSync('node', [STATUSLINE], { input: 'not json', env }).toString();
   assert.match(out, /Claude/);
@@ -199,6 +231,15 @@ test('auto: installs, refreshes, respects remove and other status lines', () => 
 
   execFileSync('node', [SETUP, 'install'], { env: e });
   assert.strictEqual(auto(), 'refreshed'); // setup clears the opt-out
+
+  // The plugin's color settings are copied into config.json, and only when they change.
+  const cfgPath = path.join(cfgDir, 'progress-status', 'config.json');
+  execFileSync('node', [SETUP, 'auto', '--amber', '30', '--red', '60'], { env: e });
+  assert.strictEqual(JSON.parse(fs.readFileSync(cfgPath, 'utf8')).amberAt, 30);
+  assert.strictEqual(JSON.parse(fs.readFileSync(cfgPath, 'utf8')).redAt, 60);
+  assert.strictEqual(JSON.parse(fs.readFileSync(cfgPath, 'utf8')).barWidth, 10); // other settings kept
+  execFileSync('node', [SETUP, 'auto', '--amber', 'x'], { env: e }); // junk leaves them alone
+  assert.strictEqual(JSON.parse(fs.readFileSync(cfgPath, 'utf8')).amberAt, 30);
 
   const other = { type: 'command', command: 'echo mine' };
   fs.writeFileSync(settingsFile, JSON.stringify({ statusLine: other }));
